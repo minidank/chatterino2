@@ -112,6 +112,9 @@ namespace {
                                 });
         };
 
+<<<<<<< HEAD
+        if (creatorFlags.has(MessageElementFlag::BttvEmote))
+=======
         if (creatorFlags.has(MessageElementFlag::TwitchEmote))
         {
             addPageLink("Raccatta");
@@ -121,6 +124,7 @@ namespace {
             addPageLink("7TV");
         }
         else if (creatorFlags.has(MessageElementFlag::BttvEmote))
+>>>>>>> 8c4c2f24 (add raccatta link)
         {
             addPageLink("BTTV");
         }

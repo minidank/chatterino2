@@ -653,7 +653,8 @@ void Window::onAccountSelected()
     auto user = getApp()->accounts->twitch.getCurrent();
 
     // update title (also append username on Linux and MacOS)
-    QString windowTitle = Version::instance().fullVersion();
+    //QString windowTitle = Version::instance().fullVersion();
+    QString windowTitle = "Chatterino";
 
 #if defined(Q_OS_LINUX) || defined(Q_OS_MACOS)
     if (user->isAnon())
