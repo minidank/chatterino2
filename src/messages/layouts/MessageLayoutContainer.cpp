@@ -48,6 +48,7 @@ void MessageLayoutContainer::begin(int width, float scale, MessageFlags flags)
     this->dotdotdotWidth_ = mediumFontMetrics.horizontalAdvance("...");
     this->canAddMessages_ = true;
     this->isCollapsed_ = false;
+    this->wasPrevReversed_ = false;
 }
 
 void MessageLayoutContainer::clear()
@@ -83,7 +84,7 @@ void MessageLayoutContainer::addElementNoLineBreak(
     this->_addElement(element);
 }
 
-bool MessageLayoutContainer::canAddElements()
+bool MessageLayoutContainer::canAddElements() const
 {
     return this->canAddMessages_;
 }
@@ -264,7 +265,7 @@ void MessageLayoutContainer::reorderRTL(int firstTextIndex)
     int startIndex = static_cast<int>(this->lineStart_);
     int endIndex = static_cast<int>(this->elements_.size()) - 1;
 
-    if (firstTextIndex >= endIndex)
+    if (firstTextIndex >= endIndex || startIndex >= this->elements_.size())
     {
         return;
     }
@@ -272,7 +273,6 @@ void MessageLayoutContainer::reorderRTL(int firstTextIndex)
 
     std::vector<int> correctSequence;
     std::stack<int> swappedSequence;
-    bool wasPrevReversed = false;
 
     // we reverse a sequence of words if it's opposite to the text direction
     // the second condition below covers the possible three cases:
@@ -291,18 +291,19 @@ void MessageLayoutContainer::reorderRTL(int firstTextIndex)
     for (int i = startIndex; i <= endIndex; i++)
     {
         if (isNeutral(this->elements_[i]->getText()) &&
-            ((this->first == FirstWord::RTL && !wasPrevReversed) ||
-             (this->first == FirstWord::LTR && wasPrevReversed)))
+            ((this->first == FirstWord::RTL && !this->wasPrevReversed_) ||
+             (this->first == FirstWord::LTR && this->wasPrevReversed_)))
         {
             this->elements_[i]->reversedNeutral = true;
         }
         if (((this->elements_[i]->getText().isRightToLeft() !=
               (this->first == FirstWord::RTL)) &&
              !isNeutral(this->elements_[i]->getText())) ||
-            (isNeutral(this->elements_[i]->getText()) && wasPrevReversed))
+            (isNeutral(this->elements_[i]->getText()) &&
+             this->wasPrevReversed_))
         {
             swappedSequence.push(i);
-            wasPrevReversed = true;
+            this->wasPrevReversed_ = true;
         }
         else
         {
@@ -312,7 +313,7 @@ void MessageLayoutContainer::reorderRTL(int firstTextIndex)
                 swappedSequence.pop();
             }
             correctSequence.push_back(i);
-            wasPrevReversed = false;
+            this->wasPrevReversed_ = false;
         }
     }
     while (!swappedSequence.empty())
@@ -331,9 +332,12 @@ void MessageLayoutContainer::reorderRTL(int firstTextIndex)
         this->currentX_ = this->elements_[startIndex]->getRect().left();
     }
     // manually do the first call with -1 as previous index
-    this->_addElement(this->elements_[correctSequence[0]].get(), false, -1);
+    if (this->canAddElements())
+    {
+        this->_addElement(this->elements_[correctSequence[0]].get(), false, -1);
+    }
 
-    for (int i = 1; i < correctSequence.size(); i++)
+    for (int i = 1; i < correctSequence.size() && this->canAddElements(); i++)
     {
         this->_addElement(this->elements_[correctSequence[i]].get(), false,
                           correctSequence[i - 1]);
@@ -446,7 +450,17 @@ void MessageLayoutContainer::end()
             QSize(this->dotdotdotWidth_, this->textLineHeight_),
             QColor("#00D80A"), FontStyle::ChatMediumBold, this->scale_);
 
-        // getApp()->themes->messages.textColors.system
+        if (this->first == FirstWord::RTL)
+        {
+            // Shift all elements in the next line to the left
+            for (int i = this->lines_.back().startIndex;
+                 i < this->elements_.size(); i++)
+            {
+                QPoint prevPos = this->elements_[i]->getRect().topLeft();
+                this->elements_[i]->setPosition(
+                    QPoint(prevPos.x() + this->dotdotdotWidth_, prevPos.y()));
+            }
+        }
         this->_addElement(element, true);
         this->isCollapsed_ = true;
     }
@@ -798,10 +812,10 @@ int MessageLayoutContainer::getFirstMessageCharacterIndex() const
     return index;
 }
 
-void MessageLayoutContainer::addSelectionText(QString &str, int from, int to,
-                                              CopyMode copymode)
+void MessageLayoutContainer::addSelectionText(QString &str, uint32_t from,
+                                              uint32_t to, CopyMode copymode)
 {
-    int index = 0;
+    uint32_t index = 0;
     bool first = true;
 
     for (auto &element : this->elements_)
@@ -819,7 +833,9 @@ void MessageLayoutContainer::addSelectionText(QString &str, int from, int to,
             if (element->getCreator().getFlags().hasAny(
                     {MessageElementFlag::Timestamp,
                      MessageElementFlag::Username, MessageElementFlag::Badges}))
+            {
                 continue;
+            }
         }
 
         auto indexCount = element->getSelectionIndexCount();

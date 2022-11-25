@@ -156,54 +156,58 @@ int Notebook::indexOf(QWidget *page) const
 
 void Notebook::select(QWidget *page, bool focusPage)
 {
+    if (!page)
+    {
+        return;
+    }
+
     if (page == this->selectedPage_)
     {
         return;
     }
 
-    if (page != nullptr)
+    auto *item = this->findItem(page);
+    if (!item)
     {
-        page->setHidden(false);
+        return;
+    }
 
-        assert(this->containsPage(page));
-        Item &item = this->findItem(page);
+    page->show();
 
-        item.tab->setSelected(true);
-        item.tab->raise();
+    item->tab->setSelected(true);
+    item->tab->raise();
 
-        if (focusPage)
+    if (focusPage)
+    {
+        if (item->selectedWidget == nullptr)
         {
-            if (item.selectedWidget == nullptr)
+            item->page->setFocus();
+        }
+        else
+        {
+            if (containsChild(page, item->selectedWidget))
             {
-                item.page->setFocus();
+                item->selectedWidget->setFocus(Qt::MouseFocusReason);
             }
             else
             {
-                if (containsChild(page, item.selectedWidget))
-                {
-                    item.selectedWidget->setFocus(Qt::MouseFocusReason);
-                }
-                else
-                {
-                    qCDebug(chatterinoWidget) << "Notebook: selected child of "
-                                                 "page doesn't exist anymore";
-                }
+                qCDebug(chatterinoWidget) << "Notebook: selected child of "
+                                             "page doesn't exist anymore";
             }
         }
     }
 
     if (this->selectedPage_ != nullptr)
     {
-        this->selectedPage_->setHidden(true);
+        this->selectedPage_->hide();
 
-        Item &item = this->findItem(selectedPage_);
-        item.tab->setSelected(false);
-
-        //        for (auto split : this->selectedPage->getSplits()) {
-        //            split->updateLastReadMessage();
-        //        }
-
-        item.selectedWidget = this->selectedPage_->focusWidget();
+        auto *item = this->findItem(selectedPage_);
+        if (!item)
+        {
+            return;
+        }
+        item->tab->setSelected(false);
+        item->selectedWidget = this->selectedPage_->focusWidget();
     }
 
     this->selectedPage_ = page;
@@ -219,14 +223,17 @@ bool Notebook::containsPage(QWidget *page)
                        });
 }
 
-Notebook::Item &Notebook::findItem(QWidget *page)
+Notebook::Item *Notebook::findItem(QWidget *page)
 {
     auto it = std::find_if(this->items_.begin(), this->items_.end(),
                            [page](const auto &item) {
                                return page == item.page;
                            });
-    assert(it != this->items_.end());
-    return *it;
+    if (it != this->items_.end())
+    {
+        return &(*it);
+    }
+    return nullptr;
 }
 
 bool Notebook::containsChild(const QObject *obj, const QObject *child)
@@ -617,7 +624,7 @@ void Notebook::performLayout(bool animated)
 
         // zneix: if we were to remove buttons when tabs are hidden
         // stuff below to "set page bounds" part should be in conditional statement
-        int tabsPerColumn = (this->height() - top) / tabHeight;
+        int tabsPerColumn = (this->height() - top) / (tabHeight + tabSpacer);
         if (tabsPerColumn == 0)  // window hasn't properly rendered yet
         {
             return;
@@ -719,7 +726,7 @@ void Notebook::performLayout(bool animated)
 
         // zneix: if we were to remove buttons when tabs are hidden
         // stuff below to "set page bounds" part should be in conditional statement
-        int tabsPerColumn = (this->height() - top) / tabHeight;
+        int tabsPerColumn = (this->height() - top) / (tabHeight + tabSpacer);
         if (tabsPerColumn == 0)  // window hasn't properly rendered yet
         {
             return;

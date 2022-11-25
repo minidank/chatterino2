@@ -108,8 +108,8 @@ ImageLayoutElement::ImageLayoutElement(MessageElement &creator, ImagePtr image,
     this->trailingSpace = creator.hasTrailingSpace();
 }
 
-void ImageLayoutElement::addCopyTextToString(QString &str, int from,
-                                             int to) const
+void ImageLayoutElement::addCopyTextToString(QString &str, uint32_t from,
+                                             uint32_t to) const
 {
     const auto *emoteElement =
         dynamic_cast<EmoteElement *>(&this->getCreator());
@@ -272,8 +272,8 @@ void TextLayoutElement::listenToLinkChanges()
         });
 }
 
-void TextLayoutElement::addCopyTextToString(QString &str, int from,
-                                            int to) const
+void TextLayoutElement::addCopyTextToString(QString &str, uint32_t from,
+                                            uint32_t to) const
 {
     str += this->getText().mid(from, to - from);
 
@@ -327,7 +327,8 @@ int TextLayoutElement::getMouseOverIndex(const QPoint &abs) const
         auto &&text = this->getText();
         auto width = metrics.horizontalAdvance(this->getText()[i]);
 
-        if (x + width > abs.x())
+        // accept mouse to be at only 50%+ of character width to increase index
+        if (x + (width * 0.5) > abs.x())
         {
             if (text.size() > i + 1 && QChar::isLowSurrogate(text[i].unicode()))
             {
@@ -386,8 +387,8 @@ TextIconLayoutElement::TextIconLayoutElement(MessageElement &creator,
 {
 }
 
-void TextIconLayoutElement::addCopyTextToString(QString &str, int from,
-                                                int to) const
+void TextIconLayoutElement::addCopyTextToString(QString &str, uint32_t from,
+                                                uint32_t to) const
 {
 }
 
@@ -512,14 +513,12 @@ int ReplyCurveLayoutElement::getXFromIndex(int index)
     {
         return this->getRect().left();
     }
-    else
-    {
-        return this->getRect().right();
-    }
+
+    return this->getRect().right();
 }
 
-void ReplyCurveLayoutElement::addCopyTextToString(QString &str, int from,
-                                                  int to) const
+void ReplyCurveLayoutElement::addCopyTextToString(QString &str, uint32_t from,
+                                                  uint32_t to) const
 {
 }
 

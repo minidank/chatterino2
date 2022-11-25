@@ -58,7 +58,7 @@ struct MessageLayoutContainer {
     void end();
 
     void clear();
-    bool canAddElements();
+    bool canAddElements() const;
     void addElement(MessageLayoutElement *element);
     void addElementNoLineBreak(MessageLayoutElement *element);
     void breakLine();
@@ -81,7 +81,8 @@ struct MessageLayoutContainer {
     int getSelectionIndex(QPoint point);
     int getLastCharacterIndex() const;
     int getFirstMessageCharacterIndex() const;
-    void addSelectionText(QString &str, int from, int to, CopyMode copymode);
+    void addSelectionText(QString &str, uint32_t from, uint32_t to,
+                          CopyMode copymode);
 
     bool isCollapsed();
 
@@ -127,6 +128,7 @@ private:
     int dotdotdotWidth_ = 0;
     bool canAddMessages_ = true;
     bool isCollapsed_ = false;
+    bool wasPrevReversed_ = false;
 
     std::vector<std::unique_ptr<MessageLayoutElement>> elements_;
     std::vector<Line> lines_;

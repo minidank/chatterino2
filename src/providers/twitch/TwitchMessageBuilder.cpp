@@ -4,6 +4,7 @@
 #include "controllers/accounts/AccountController.hpp"
 #include "controllers/ignores/IgnoreController.hpp"
 #include "controllers/ignores/IgnorePhrase.hpp"
+#include "controllers/userdata/UserDataController.hpp"
 #include "messages/Message.hpp"
 #include "providers/chatterino/ChatterinoBadges.hpp"
 #include "providers/ffz/FfzBadges.hpp"
@@ -50,62 +51,6 @@ const QSet<QString> zeroWidthEmotes{
 namespace chatterino {
 
 namespace {
-
-    QString stylizeUsername(const QString &username, const Message &message)
-    {
-        auto app = getApp();
-
-        const QString &localizedName = message.localizedName;
-        bool hasLocalizedName = !localizedName.isEmpty();
-
-        // The full string that will be rendered in the chat widget
-        QString usernameText;
-
-        switch (getSettings()->usernameDisplayMode.getValue())
-        {
-            case UsernameDisplayMode::Username: {
-                usernameText = username;
-            }
-            break;
-
-            case UsernameDisplayMode::LocalizedName: {
-                if (hasLocalizedName)
-                {
-                    usernameText = localizedName;
-                }
-                else
-                {
-                    usernameText = username;
-                }
-            }
-            break;
-
-            default:
-            case UsernameDisplayMode::UsernameAndLocalizedName: {
-                if (hasLocalizedName)
-                {
-                    usernameText = username + "(" + localizedName + ")";
-                }
-                else
-                {
-                    usernameText = username;
-                }
-            }
-            break;
-        }
-
-        auto nicknames = getCSettings().nicknames.readOnly();
-
-        for (const auto &nickname : *nicknames)
-        {
-            if (nickname.match(usernameText))
-            {
-                break;
-            }
-        }
-
-        return usernameText;
-    }
 
     void appendTwitchEmoteOccurrences(const QString &emote,
                                       std::vector<TwitchEmoteOccurrence> &vec,
@@ -292,8 +237,8 @@ MessagePtr TwitchMessageBuilder::build()
 
         const auto &threadRoot = this->thread_->root();
 
-        QString usernameText =
-            stylizeUsername(threadRoot->loginName, *threadRoot.get());
+        QString usernameText = SharedMessageBuilder::stylizeUsername(
+            threadRoot->loginName, *threadRoot.get());
 
         this->emplace<ReplyCurveElement>();
 
@@ -691,6 +636,18 @@ void TwitchMessageBuilder::parseRoomID()
 
 void TwitchMessageBuilder::parseUsernameColor()
 {
+    const auto *userData = getIApp()->getUserData();
+    assert(userData != nullptr);
+
+    if (const auto &user = userData->getUser(this->userId_))
+    {
+        if (user->color)
+        {
+            this->usernameColor_ = user->color.value();
+            return;
+        }
+    }
+
     const auto iterator = this->tags.find("color");
     if (iterator != this->tags.end())
     {
@@ -770,7 +727,8 @@ void TwitchMessageBuilder::appendUsername()
         }
     }
 
-    QString usernameText = stylizeUsername(username, this->message());
+    QString usernameText =
+        SharedMessageBuilder::stylizeUsername(username, this->message());
 
     if (this->args.isSentWhisper)
     {
