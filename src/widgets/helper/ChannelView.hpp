@@ -1,14 +1,14 @@
 #pragma once
 
 #include "common/FlagsEnum.hpp"
-#include "controllers/filters/FilterSet.hpp"
-#include "messages/Image.hpp"
 #include "messages/LimitedQueue.hpp"
 #include "messages/LimitedQueueSnapshot.hpp"
 #include "messages/Selection.hpp"
+#include "util/ThreadGuard.hpp"
 #include "widgets/BaseWidget.hpp"
 
 #include <pajlada/signals/signal.hpp>
+#include <QMenu>
 #include <QPaintEvent>
 #include <QScroller>
 #include <QTimer>
@@ -42,6 +42,8 @@ class EffectLabel;
 struct Link;
 class MessageLayoutElement;
 class Split;
+class FilterSet;
+using FilterSetPtr = std::shared_ptr<FilterSet>;
 
 enum class PauseReason {
     Mouse,
@@ -77,9 +79,17 @@ public:
 
     void queueUpdate();
     Scrollbar &getScrollBar();
+
     QString getSelectedText();
     bool hasSelection();
     void clearSelection();
+    /**
+     * Copies the currently selected text to the users clipboard.
+     *
+     * @see ::getSelectedText()
+     */
+    void copySelectedText();
+
     void setEnableScrollingToBottom(bool);
     bool getEnableScrollingToBottom() const;
     void setOverrideFlags(boost::optional<MessageElementFlags> value);
@@ -187,8 +197,8 @@ private:
 
     void performLayout(bool causedByScrollbar = false);
     void layoutVisibleMessages(
-        LimitedQueueSnapshot<MessageLayoutPtr> &messages);
-    void updateScrollbar(LimitedQueueSnapshot<MessageLayoutPtr> &messages,
+        const LimitedQueueSnapshot<MessageLayoutPtr> &messages);
+    void updateScrollbar(const LimitedQueueSnapshot<MessageLayoutPtr> &messages,
                          bool causedByScrollbar);
 
     void drawMessages(QPainter &painter);
@@ -262,6 +272,7 @@ private:
     boost::optional<MessageElementFlags> overrideFlags_;
     MessageLayoutPtr lastReadMessage_;
 
+    ThreadGuard snapshotGuard_;
     LimitedQueueSnapshot<MessageLayoutPtr> snapshot_;
 
     ChannelPtr channel_ = nullptr;

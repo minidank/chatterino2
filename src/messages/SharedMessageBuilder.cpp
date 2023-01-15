@@ -5,7 +5,10 @@
 #include "controllers/highlights/HighlightController.hpp"
 #include "controllers/ignores/IgnoreController.hpp"
 #include "controllers/ignores/IgnorePhrase.hpp"
+#include "controllers/nicknames/Nickname.hpp"
+#include "messages/Message.hpp"
 #include "messages/MessageElement.hpp"
+#include "providers/twitch/TwitchBadge.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/Helpers.hpp"
@@ -19,14 +22,17 @@ namespace chatterino {
 
 namespace {
 
+    /**
+     * Gets the default sound url if the user set one,
+     * or the chatterino default ping sound if no url is set.
+     */
     QUrl getFallbackHighlightSound()
     {
         QString path = getSettings()->pathHighlightSound;
-        bool fileExists = QFileInfo::exists(path) && QFileInfo(path).isFile();
+        bool fileExists = !path.isEmpty() && QFileInfo::exists(path) &&
+                          QFileInfo(path).isFile();
 
-        // Use fallback sound when checkbox is not checked
-        // or custom file doesn't exist
-        if (getSettings()->customHighlightSound && fileExists)
+        if (fileExists)
         {
             return QUrl::fromLocalFile(path);
         }

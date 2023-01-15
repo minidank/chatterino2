@@ -3,12 +3,9 @@
 #include "BaseSettings.hpp"
 #include "common/Channel.hpp"
 #include "common/SignalVector.hpp"
-#include "controllers/filters/FilterRecord.hpp"
-#include "controllers/highlights/HighlightBadge.hpp"
-#include "controllers/highlights/HighlightPhrase.hpp"
-#include "controllers/moderationactions/ModerationAction.hpp"
-#include "controllers/nicknames/Nickname.hpp"
+#include "controllers/logging/ChannelLog.hpp"
 #include "singletons/Toasts.hpp"
+#include "util/RapidJsonSerializeQString.hpp"
 #include "util/StreamerMode.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/SplitInput.hpp"
@@ -24,7 +21,10 @@ class HighlightPhrase;
 class HighlightBlacklistUser;
 class IgnorePhrase;
 class FilterRecord;
+using FilterRecordPtr = std::shared_ptr<FilterRecord>;
 class Nickname;
+class HighlightBadge;
+class ModerationAction;
 
 /// Settings which are available for reading on all threads.
 class ConcurrentSettings
@@ -41,6 +41,7 @@ public:
     SignalVector<FilterRecordPtr> &filterRecords;
     SignalVector<Nickname> &nicknames;
     SignalVector<ModerationAction> &moderationActions;
+    SignalVector<ChannelLog> &loggedChannels;
 
     bool isHighlightedUser(const QString &username);
     bool isBlacklistedUser(const QString &username);
@@ -119,6 +120,7 @@ public:
 
     //    BoolSetting collapseLongMessages =
     //    {"/appearance/messages/collapseLongMessages", false};
+    BoolSetting hideReplyContext = {"/appearance/hideReplyContext", false};
     BoolSetting showReplyButton = {"/appearance/showReplyButton", false};
     BoolSetting stripReplyMention = {"/appearance/stripReplyMention", true};
     IntSetting collpseMessagesMinLines = {
@@ -271,7 +273,6 @@ public:
 
     /// Highlighting
     //    BoolSetting enableHighlights = {"/highlighting/enabled", true};
-    BoolSetting customHighlightSound = {"/highlighting/useCustomSound", false};
 
     BoolSetting enableSelfHighlight = {
         "/highlighting/selfHighlight/nameIsHighlightKeyword", true};
@@ -303,8 +304,8 @@ public:
     //        "/highlighting/redeemedHighlight/enableSound", false};
     //    BoolSetting enableRedeemedHighlightTaskbar = {
     //        "/highlighting/redeemedHighlight/enableTaskbarFlashing", false};
-    QStringSetting redeemedHighlightSoundUrl = {
-        "/highlighting/redeemedHighlightSoundUrl", ""};
+    //    QStringSetting redeemedHighlightSoundUrl = {
+    //        "/highlighting/redeemedHighlightSoundUrl", ""};
     QStringSetting redeemedHighlightColor = {
         "/highlighting/redeemedHighlightColor", ""};
 
@@ -314,8 +315,8 @@ public:
     //        "/highlighting/firstMessageHighlight/enableSound", false};
     //    BoolSetting enableFirstMessageHighlightTaskbar = {
     //        "/highlighting/firstMessageHighlight/enableTaskbarFlashing", false};
-    QStringSetting firstMessageHighlightSoundUrl = {
-        "/highlighting/firstMessageHighlightSoundUrl", ""};
+    //    QStringSetting firstMessageHighlightSoundUrl = {
+    //        "/highlighting/firstMessageHighlightSoundUrl", ""};
     QStringSetting firstMessageHighlightColor = {
         "/highlighting/firstMessageHighlightColor", ""};
 
@@ -325,8 +326,8 @@ public:
     //        "/highlighting/elevatedMessageHighlight/enableSound", false};
     //    BoolSetting enableElevatedMessageHighlightTaskbar = {
     //        "/highlighting/elevatedMessageHighlight/enableTaskbarFlashing", false};
-    QStringSetting elevatedMessageHighlightSoundUrl = {
-        "/highlighting/elevatedMessageHighlight/soundUrl", ""};
+    //    QStringSetting elevatedMessageHighlightSoundUrl = {
+    //        "/highlighting/elevatedMessageHighlight/soundUrl", ""};
     QStringSetting elevatedMessageHighlightColor = {
         "/highlighting/elevatedMessageHighlight/color", ""};
 
@@ -365,6 +366,8 @@ public:
 
     /// Logging
     BoolSetting enableLogging = {"/logging/enabled", false};
+    BoolSetting onlyLogListedChannels = {"/logging/onlyLogListedChannels",
+                                         false};
 
     QStringSetting logPath = {"/logging/path", ""};
 
@@ -521,7 +524,3 @@ private:
 };
 
 }  // namespace chatterino
-
-#ifdef CHATTERINO
-#    include "singletons/Settings.hpp"
-#endif

@@ -1,7 +1,6 @@
 #pragma once
 
-#include "singletons/Settings.hpp"
-
+#include <pajlada/settings.hpp>
 #include <pajlada/signals/signal.hpp>
 #include <QCheckBox>
 #include <QComboBox>
@@ -66,6 +65,20 @@ public:
     QLineEdit *createLineEdit(pajlada::Settings::Setting<QString> &setting);
     QSpinBox *createSpinBox(pajlada::Settings::Setting<int> &setting,
                             int min = 0, int max = 2500);
+    template <typename T>
+    SLabel *createLabel(const std::function<QString(const T &)> &makeText,
+                        pajlada::Settings::Setting<T> &setting)
+    {
+        auto *label = new SLabel();
+
+        setting.connect(
+            [label, makeText](const T &value, auto) {
+                label->setText(makeText(value));
+            },
+            this->managedConnections_);
+
+        return label;
+    }
 
     virtual void onShow()
     {

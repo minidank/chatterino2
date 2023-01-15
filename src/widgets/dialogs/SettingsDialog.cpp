@@ -4,9 +4,10 @@
 #include "common/Args.hpp"
 #include "controllers/commands/CommandController.hpp"
 #include "controllers/hotkeys/HotkeyController.hpp"
-#include "singletons/Resources.hpp"
+#include "singletons/Settings.hpp"
 #include "util/LayoutCreator.hpp"
 #include "widgets/helper/Button.hpp"
+#include "widgets/helper/SettingsDialogTab.hpp"
 #include "widgets/settingspages/AboutPage.hpp"
 #include "widgets/settingspages/AccountsPage.hpp"
 #include "widgets/settingspages/CommandPage.hpp"
@@ -26,9 +27,9 @@
 namespace chatterino {
 
 SettingsDialog::SettingsDialog(QWidget *parent)
-    : BaseWindow(
-          {BaseWindow::Flags::DisableCustomScaling, BaseWindow::Flags::Dialog},
-          parent)
+    : BaseWindow({BaseWindow::Flags::DisableCustomScaling,
+                  BaseWindow::Flags::Dialog, BaseWindow::DisableLayoutSave},
+                 parent)
 {
     this->setObjectName("SettingsDialog");
     this->setWindowTitle("Chatterino Settings");

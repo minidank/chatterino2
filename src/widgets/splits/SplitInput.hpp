@@ -2,7 +2,6 @@
 
 #include "util/QObjectRef.hpp"
 #include "widgets/BaseWidget.hpp"
-#include "widgets/dialogs/EmotePopup.hpp"
 
 #include <QHBoxLayout>
 #include <QLabel>
@@ -22,6 +21,7 @@ class InputCompletionPopup;
 class EffectLabel;
 class MessageThread;
 class ResizingTextEdit;
+class ChannelView;
 
 // MessageOverflow is used for controlling how to guide the user into not
 // sending a message that will be discarded by Twitch
@@ -42,7 +42,7 @@ class SplitInput : public BaseWidget
 
 public:
     SplitInput(Split *_chatWidget, bool enableInlineReplying = true);
-    SplitInput(QWidget *parent, Split *_chatWidget,
+    SplitInput(QWidget *parent, Split *_chatWidget, ChannelView *_channelView,
                bool enableInlineReplying = true);
 
     bool hasSelection() const;
@@ -51,8 +51,6 @@ public:
     bool isEditFirstWord() const;
     QString getInputText() const;
     void insertText(const QString &text);
-
-    static const int TWITCH_MESSAGE_LIMIT = 500;
 
     void setReply(std::shared_ptr<MessageThread> reply,
                   bool showInlineReplying = true);
@@ -82,6 +80,7 @@ public:
     bool isHidden() const;
 
     pajlada::Signals::Signal<const QString &> textChanged;
+    pajlada::Signals::NoArgSignal selectionChanged;
 
 protected:
     void scaleChangedEvent(float scale_) override;
@@ -112,7 +111,7 @@ protected:
     void updateCompletionPopup();
     void showCompletionPopup(const QString &text, bool emoteCompletion);
     void hideCompletionPopup();
-    void insertCompletionText(const QString &text);
+    void insertCompletionText(const QString &input_) const;
     void openEmotePopup();
 
     void updateCancelReplyButton();
@@ -126,6 +125,7 @@ protected:
     bool shouldPreventInput(const QString &text) const;
 
     Split *const split_;
+    ChannelView *const channelView_;
     QObjectRef<EmotePopup> emotePopup_;
     QObjectRef<InputCompletionPopup> inputCompletionPopup_;
 
@@ -150,8 +150,6 @@ protected:
     QStringList prevMsg_;
     QString currMsg_;
     int prevIndex_ = 0;
-
-    int lastOverflowLength = TWITCH_MESSAGE_LIMIT;
 
     // Hidden denotes whether this split input should be hidden or not
     // This is used instead of the regular QWidget::hide/show because

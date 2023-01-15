@@ -3,10 +3,10 @@
 #include "common/Aliases.hpp"
 #include "common/Channel.hpp"
 #include "common/NullablePtr.hpp"
-#include "pajlada/signals/signalholder.hpp"
 #include "widgets/BaseWidget.hpp"
 
 #include <boost/signals2.hpp>
+#include <pajlada/signals/signalholder.hpp>
 #include <QFont>
 #include <QShortcut>
 #include <QVBoxLayout>
@@ -130,6 +130,14 @@ private:
      */
     void joinChannelInNewTab(ChannelPtr channel);
 
+    /**
+     * @brief Refresh moderation mode layouts/buttons
+     *
+     * Should be called after after the moderation mode is changed or
+     * moderation actions have been changed
+     **/
+    void refreshModerationMode();
+
     IndirectChannel channel_;
 
     bool moderationMode_{};
@@ -168,7 +176,6 @@ public slots:
     void openBrowserPlayer();
     void openInStreamlink();
     void openWithCustomScheme();
-    void copyToClipboard();
     void startWatching();
     void setFiltersDialog();
     void showSearch(bool singleChannel);

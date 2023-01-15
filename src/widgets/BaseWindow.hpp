@@ -4,6 +4,7 @@
 #include "widgets/BaseWidget.hpp"
 
 #include <pajlada/signals/signalholder.hpp>
+#include <QTimer>
 
 #include <functional>
 
@@ -32,6 +33,7 @@ public:
         FramelessDraggable = 16,
         DontFocus = 32,
         Dialog = 64,
+        DisableLayoutSave = 128,
     };
 
     enum ActionOnFocusLoss { Nothing, Delete, Close, Hide };
@@ -94,7 +96,7 @@ protected:
 
 private:
     void init();
-    void moveIntoDesktopRect(QWidget *parent, QPoint point);
+    void moveIntoDesktopRect(QPoint point);
     void calcButtonsSizes();
     void drawCustomWindowFrame(QPainter &painter);
     void onFocusLost();

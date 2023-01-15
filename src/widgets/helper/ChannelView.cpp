@@ -4,22 +4,26 @@
 #include "common/Common.hpp"
 #include "common/QLogging.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/commands/Command.hpp"
 #include "controllers/commands/CommandController.hpp"
+#include "controllers/filters/FilterSet.hpp"
 #include "debug/Benchmark.hpp"
 #include "messages/Emote.hpp"
+#include "messages/Image.hpp"
 #include "messages/layouts/MessageLayout.hpp"
 #include "messages/layouts/MessageLayoutElement.hpp"
 #include "messages/LimitedQueueSnapshot.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
 #include "messages/MessageElement.hpp"
+#include "messages/MessageThread.hpp"
 #include "providers/LinkResolver.hpp"
+#include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "singletons/Resources.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
-#include "singletons/TooltipPreviewImage.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/Clipboard.hpp"
 #include "util/DistanceBetweenPoints.hpp"
@@ -31,6 +35,7 @@
 #include "widgets/dialogs/SettingsDialog.hpp"
 #include "widgets/dialogs/UserInfoPopup.hpp"
 #include "widgets/helper/EffectLabel.hpp"
+#include "widgets/helper/ScrollbarHighlight.hpp"
 #include "widgets/helper/SearchPopup.hpp"
 #include "widgets/Scrollbar.hpp"
 #include "widgets/splits/Split.hpp"
@@ -146,7 +151,7 @@ ChannelView::ChannelView(BaseWidget *parent, Split *split, Context context,
                          size_t messagesLimit)
     : BaseWidget(parent)
     , split_(split)
-    , scrollBar_(new Scrollbar(this))
+    , scrollBar_(new Scrollbar(messagesLimit, this))
     , highlightAnimation_(this)
     , context_(context)
     , messages_(messagesLimit)
@@ -170,9 +175,13 @@ ChannelView::ChannelView(BaseWidget *parent, Split *split, Context context,
         this->updatePauses();
     });
 
+    // This shortcut is not used in splits, it's used in views that
+    // don't have a SplitInput like the SearchPopup or EmotePopup.
+    // See SplitInput::installKeyPressedEvent for the copy event
+    // from views with a SplitInput.
     auto shortcut = new QShortcut(QKeySequence::StandardKey::Copy, this);
     QObject::connect(shortcut, &QShortcut::activated, [this] {
-        crossPlatformCopy(this->getSelectedText());
+        this->copySelectedText();
     });
 
     this->clickTimer_ = new QTimer(this);
@@ -205,12 +214,13 @@ void ChannelView::initializeLayout()
     this->goToBottom_->getLabel().setText("More messages below");
     this->goToBottom_->setVisible(false);
 
-    QObject::connect(this->goToBottom_, &EffectLabel::leftClicked, this, [=] {
-        QTimer::singleShot(180, [=] {
-            this->scrollBar_->scrollToBottom(
-                getSettings()->enableSmoothScrollingNewMessages.getValue());
+    QObject::connect(
+        this->goToBottom_, &EffectLabel::leftClicked, this, [this] {
+            QTimer::singleShot(180, [this] {
+                this->scrollBar_->scrollToBottom(
+                    getSettings()->enableSmoothScrollingNewMessages.getValue());
+            });
         });
-    });
 }
 
 void ChannelView::initializeScrollbar()
@@ -426,7 +436,7 @@ void ChannelView::performLayout(bool causedByScrollbar)
     // BenchmarkGuard benchmark("layout");
 
     /// Get messages and check if there are at least 1
-    auto &messages = this->getMessagesSnapshot();
+    const auto &messages = this->getMessagesSnapshot();
 
     this->showingLatestMessages_ =
         this->scrollBar_->isAtBottom() ||
@@ -444,7 +454,7 @@ void ChannelView::performLayout(bool causedByScrollbar)
 }
 
 void ChannelView::layoutVisibleMessages(
-    LimitedQueueSnapshot<MessageLayoutPtr> &messages)
+    const LimitedQueueSnapshot<MessageLayoutPtr> &messages)
 {
     const auto start = size_t(this->scrollBar_->getCurrentValue());
     const auto layoutWidth = this->getLayoutWidth();
@@ -468,11 +478,14 @@ void ChannelView::layoutVisibleMessages(
     }
 
     if (redrawRequired)
+    {
         this->queueUpdate();
+    }
 }
 
 void ChannelView::updateScrollbar(
-    LimitedQueueSnapshot<MessageLayoutPtr> &messages, bool causedByScrollbar)
+    const LimitedQueueSnapshot<MessageLayoutPtr> &messages,
+    bool causedByScrollbar)
 {
     if (messages.size() == 0)
     {
@@ -596,6 +609,11 @@ void ChannelView::clearSelection()
     queueLayout();
 }
 
+void ChannelView::copySelectedText()
+{
+    crossPlatformCopy(this->getSelectedText());
+}
+
 void ChannelView::setEnableScrollingToBottom(bool value)
 {
     this->enableScrollingToBottom_ = value;
@@ -619,6 +637,7 @@ const boost::optional<MessageElementFlags> &ChannelView::getOverrideFlags()
 
 LimitedQueueSnapshot<MessageLayoutPtr> &ChannelView::getMessagesSnapshot()
 {
+    this->snapshotGuard_.guard();
     if (!this->paused() /*|| this->scrollBar_->isVisible()*/)
     {
         this->snapshot_ = this->messages_.getSnapshot();
@@ -1119,9 +1138,11 @@ MessageElementFlags ChannelView::getFlags() const
     if (this->sourceChannel_ == app->twitch->mentionsChannel)
         flags.set(MessageElementFlag::ChannelName);
 
-    if (this->context_ == Context::ReplyThread)
+    if (this->context_ == Context::ReplyThread ||
+        getSettings()->hideReplyContext)
     {
         // Don't show inline replies within the ReplyThreadPopup
+        // or if they're hidden
         flags.unset(MessageElementFlag::RepliedMessage);
     }
 
@@ -1646,8 +1667,6 @@ void ChannelView::mouseMoveEvent(QMouseEvent *event)
     }
     else
     {
-        auto &tooltipPreviewImage = TooltipPreviewImage::instance();
-        tooltipPreviewImage.setImageScale(0, 0);
         auto badgeElement = dynamic_cast<const BadgeElement *>(element);
 
         if ((badgeElement || emoteElement) &&
@@ -1658,18 +1677,18 @@ void ChannelView::mouseMoveEvent(QMouseEvent *event)
             {
                 if (emoteElement)
                 {
-                    tooltipPreviewImage.setImage(
+                    tooltipWidget->setImage(
                         emoteElement->getEmote()->images.getImage(3.0));
                 }
                 else if (badgeElement)
                 {
-                    tooltipPreviewImage.setImage(
+                    tooltipWidget->setImage(
                         badgeElement->getEmote()->images.getImage(3.0));
                 }
             }
             else
             {
-                tooltipPreviewImage.setImage(nullptr);
+                tooltipWidget->clearImage();
             }
         }
         else
@@ -1692,7 +1711,7 @@ void ChannelView::mouseMoveEvent(QMouseEvent *event)
             auto thumbnailSize = getSettings()->thumbnailSize;
             if (!thumbnailSize)
             {
-                tooltipPreviewImage.setImage(nullptr);
+                tooltipWidget->clearImage();
             }
             else
             {
@@ -1705,13 +1724,12 @@ void ChannelView::mouseMoveEvent(QMouseEvent *event)
                     shouldHideThumbnail
                         ? Image::fromResourcePixmap(getResources().streamerMode)
                         : element->getThumbnail();
-                tooltipPreviewImage.setImage(std::move(thumb));
+                tooltipWidget->setImage(std::move(thumb));
 
                 if (element->getThumbnailType() ==
                     MessageElement::ThumbnailType::Link_Thumbnail)
                 {
-                    tooltipPreviewImage.setImageScale(thumbnailSize,
-                                                      thumbnailSize);
+                    tooltipWidget->setImageScale(thumbnailSize, thumbnailSize);
                 }
             }
         }
@@ -1719,10 +1737,7 @@ void ChannelView::mouseMoveEvent(QMouseEvent *event)
         tooltipWidget->moveTo(this, event->globalPos());
         tooltipWidget->setWordWrap(isLinkValid);
         tooltipWidget->setText(element->getTooltip());
-        tooltipWidget->adjustSize();
-        tooltipWidget->setWindowFlag(Qt::WindowStaysOnTopHint, true);
         tooltipWidget->show();
-        tooltipWidget->raise();
     }
 
     // check if word has a link
