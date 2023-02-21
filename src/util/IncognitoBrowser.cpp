@@ -1,15 +1,17 @@
 #include "util/IncognitoBrowser.hpp"
+#ifdef USEWINSDK
+#    include "util/WindowsHelper.hpp"
+#endif
 
 #include <QProcess>
 #include <QRegularExpression>
-#include <QSettings>
 #include <QVariant>
 
 namespace {
 
 using namespace chatterino;
 
-#ifdef Q_OS_WIN
+#ifdef USEWINSDK
 QString injectPrivateSwitch(QString command)
 {
     // list of command line switches to turn on private browsing in browsers
@@ -45,25 +47,29 @@ QString injectPrivateSwitch(QString command)
     return QString();
 }
 
-QString getCommand(const QString &link)
+QString getCommand()
 {
-    // get default browser prog id
-    auto browserId = QSettings("HKEY_CURRENT_"
-                               "USER\\Software\\Microsoft\\Windows\\Shell\\"
-                               "Associations\\UrlAssociatio"
-                               "ns\\http\\UserChoice",
-                               QSettings::NativeFormat)
-                         .value("Progid")
-                         .toString();
+    // get default browser start command, by protocol if possible, falling back to extension if not
+    QString command =
+        getAssociatedCommand(AssociationQueryType::Protocol, L"http");
 
-    // get default browser start command
-    auto command =
-        QSettings("HKEY_CLASSES_ROOT\\" + browserId + "\\shell\\open\\command",
-                  QSettings::NativeFormat)
-            .value("Default")
-            .toString();
     if (command.isNull())
     {
+        // failed to fetch default browser by protocol, try by file extension instead
+        command =
+            getAssociatedCommand(AssociationQueryType::FileExtension, L".html");
+    }
+
+    if (command.isNull())
+    {
+        // also try the equivalent .htm extension
+        command =
+            getAssociatedCommand(AssociationQueryType::FileExtension, L".htm");
+    }
+
+    if (command.isNull())
+    {
+        // failed to find browser command
         return QString();
     }
 
@@ -73,9 +79,6 @@ QString getCommand(const QString &link)
     {
         return QString();
     }
-
-    // link
-    command += " " + link;
 
     return command;
 }
@@ -87,8 +90,8 @@ namespace chatterino {
 
 bool supportsIncognitoLinks()
 {
-#ifdef Q_OS_WIN
-    return !getCommand("").isNull();
+#ifdef USEWINSDK
+    return !getCommand().isNull();
 #else
     return false;
 #endif
@@ -96,11 +99,11 @@ bool supportsIncognitoLinks()
 
 bool openLinkIncognito(const QString &link)
 {
-#ifdef Q_OS_WIN
-    auto command = getCommand(link);
+#ifdef USEWINSDK
+    auto command = getCommand();
 
     // TODO: split command into program path and incognito argument
-    return QProcess::startDetached(command, {});
+    return QProcess::startDetached(command, {link});
 #else
     return false;
 #endif
